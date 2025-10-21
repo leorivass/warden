@@ -1,24 +1,23 @@
 #include <avr/io.h>
 #include <util/delay.h>
-// #include <avr/interrupt.h> 
-// #include "usart.h" // Just for debugging
+#include <avr/interrupt.h> 
+#include "usart.h" // Just for debugging
 #include "i2c.h"
 
-#define LCD_ADDRESS 0x27
-#define TURN_OFF_BACKLIGHT 0x4
-#define TURN_ON_BACKLIGHT  0xC
+#define MPU6050_ADDRESS     0x68
+#define WHO_AM_I_REG        0x75
 
 int main() {
 
-    int ret;
+    uint8_t who_am_i;
 
-    // cli();
-    // serial_begin(9600);
+    cli();
+    serial_begin(9600);
     i2c_init();
-    // sei();
+    sei();
 
-    i2c_write(LCD_ADDRESS, TURN_OFF_BACKLIGHT);
-    i2c_write(LCD_ADDRESS, 0x0);
+    i2c_read_register(MPU6050_ADDRESS, WHO_AM_I_REG, &who_am_i);
+    serial_println("El valor del registro who_am_i es: %d", who_am_i);
     
     while(1);
 
