@@ -9,7 +9,7 @@ set(CMAKE_C_FLAGS "-mmcu=${MCU} -DF_CPU=${F_CPU} -Os")
 
 set(SOURCES 
     mcu/main.c
-	mcu/src/usart.c
+	mcu/src/i2c.c
 )
 
 include_directories(${CMAKE_SOURCE_DIR}/mcu/includes)
