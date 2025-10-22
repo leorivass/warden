@@ -6,10 +6,12 @@ set(F_CPU 16000000UL)
 
 set(CMAKE_C_COMPILER avr-gcc)
 set(CMAKE_C_FLAGS "-mmcu=${MCU} -DF_CPU=${F_CPU} -Os")
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -Wl,-u,vfprintf -lprintf_flt -lm")
 
 set(SOURCES 
     mcu/main.c
 	mcu/src/usart.c
+	mcu/src/mpu6050.c
 	mcu/src/i2c.c
 )
 
