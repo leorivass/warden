@@ -4,74 +4,64 @@
 static const float gyro_lsb_sensitivity  = 65.5;
 static const float accel_lsb_sensitivity = 16384.0;
 
-void mpu6050_init() {
+int mpu6050_init() {
+
+    int ret;
 
     i2c_init();
 
     /* Note: The device will come up in sleep mode upon power-up. */
     /* Turn off power sleep mode and cycle mode */
-    i2c_write_register(MPU6050_ADDRESS, PWR_MGMT_1_REG, 0x0);
+    ret = i2c_write_register(MPU6050_ADDRESS, PWR_MGMT_1_REG, 0x0);
+    if(ret) return ret;
 
     /* Set full scale range of the gyroscope to +-500°/s */
-    i2c_write_register(MPU6050_ADDRESS, GYRO_CONFIG_REG, (0x01 << 3));
+    ret = i2c_write_register(MPU6050_ADDRESS, GYRO_CONFIG_REG, (0x01 << 3));
+    if(ret) return ret;
 
     /* Set full scale range of the accelerometer to +-2g */
-    i2c_write_register(MPU6050_ADDRESS, ACCEL_CONFIG_REG, 0x0);
+    ret = i2c_write_register(MPU6050_ADDRESS, ACCEL_CONFIG_REG, 0x0);
+    if(ret) return ret;
 
-    return;
+    return 0;
 }
 
 int get_mpu6050_data(mpu6050_data *data) {
+
+    int ret;
+
+    /* This buffer stores accelerometer and gyroscope data coming from the MPU6050 */
+    uint8_t accel_buffer[6], gyro_buffer[6];
+    int16_t raw_accel_x, raw_accel_y, raw_accel_z, raw_gyro_x, raw_gyro_y, raw_gyro_z;
 
     /* Evaluate if data pointer is NULL */
     if (data == NULL) {
         return -1;
     }
     
-    uint8_t  gyro_xout_h_raw,  gyro_xout_l_raw;
-    uint8_t  gyro_yout_h_raw,  gyro_yout_l_raw;
-    uint8_t  gyro_zout_h_raw,  gyro_zout_l_raw;
+    ret = i2c_burst_read_registers(MPU6050_ADDRESS, ACCEL_XOUT_H_REG, accel_buffer, 6);
+    if(ret) return ret;
 
-    uint8_t accel_xout_h_raw, accel_xout_l_raw;
-    uint8_t accel_yout_h_raw, accel_yout_l_raw;
-    uint8_t accel_zout_h_raw, accel_zout_l_raw;
-
-    int16_t  raw_gyro_x,  raw_gyro_y,  raw_gyro_z;
-    int16_t raw_accel_x, raw_accel_y, raw_accel_z;
-
-    /* Get gyroscope values */
-    i2c_read_register(MPU6050_ADDRESS, GYRO_XOUT_H_REG, &gyro_xout_h_raw);
-    i2c_read_register(MPU6050_ADDRESS, GYRO_XOUT_L_REG, &gyro_xout_l_raw);
-    i2c_read_register(MPU6050_ADDRESS, GYRO_YOUT_H_REG, &gyro_yout_h_raw);
-    i2c_read_register(MPU6050_ADDRESS, GYRO_YOUT_L_REG, &gyro_yout_l_raw);
-    i2c_read_register(MPU6050_ADDRESS, GYRO_ZOUT_H_REG, &gyro_zout_h_raw);
-    i2c_read_register(MPU6050_ADDRESS, GYRO_ZOUT_L_REG, &gyro_zout_l_raw);
-
-    /* Get accelerometer values */
-    i2c_read_register(MPU6050_ADDRESS, ACCEL_XOUT_H_REG, &accel_xout_h_raw);
-    i2c_read_register(MPU6050_ADDRESS, ACCEL_XOUT_L_REG, &accel_xout_l_raw);
-    i2c_read_register(MPU6050_ADDRESS, ACCEL_YOUT_H_REG, &accel_yout_h_raw);
-    i2c_read_register(MPU6050_ADDRESS, ACCEL_YOUT_L_REG, &accel_yout_l_raw);
-    i2c_read_register(MPU6050_ADDRESS, ACCEL_ZOUT_H_REG, &accel_zout_h_raw);
-    i2c_read_register(MPU6050_ADDRESS, ACCEL_ZOUT_L_REG, &accel_zout_l_raw);
+    ret = i2c_burst_read_registers(MPU6050_ADDRESS, GYRO_XOUT_H_REG, gyro_buffer, 6);
+    if(ret) return ret;
 
     /* Get 16-bit raw values for each axis */
-    raw_gyro_x  = (int16_t)((gyro_xout_h_raw << 8) | gyro_xout_l_raw);
-    raw_gyro_y  = (int16_t)((gyro_yout_h_raw << 8) | gyro_yout_l_raw);
-    raw_gyro_z  = (int16_t)((gyro_zout_h_raw << 8) | gyro_zout_l_raw);
+    raw_accel_x = (int16_t)((accel_buffer[0] << 8) | accel_buffer[1]);
+    raw_accel_y = (int16_t)((accel_buffer[2] << 8) | accel_buffer[3]);
+    raw_accel_z = (int16_t)((accel_buffer[4] << 8) | accel_buffer[5]);
 
-    raw_accel_x = (int16_t)((accel_xout_h_raw << 8) | accel_xout_l_raw);
-    raw_accel_y = (int16_t)((accel_yout_h_raw << 8) | accel_yout_l_raw);
-    raw_accel_z = (int16_t)((accel_zout_h_raw << 8) | accel_zout_l_raw);
+    raw_gyro_x  = (int16_t)((gyro_buffer[0] << 8) | gyro_buffer[1]);
+    raw_gyro_y  = (int16_t)((gyro_buffer[2] << 8) | gyro_buffer[3]);
+    raw_gyro_z  = (int16_t)((gyro_buffer[4] << 8) | gyro_buffer[5]);
 
     /* Store data */
-    data->gyro_xout = raw_gyro_x / gyro_lsb_sensitivity;
-    data->gyro_yout = raw_gyro_y / gyro_lsb_sensitivity;
-    data->gyro_zout = raw_gyro_z / gyro_lsb_sensitivity;
-
     data->accel_xout = raw_accel_x / accel_lsb_sensitivity;
     data->accel_yout = raw_accel_y / accel_lsb_sensitivity;
     data->accel_zout = raw_accel_z / accel_lsb_sensitivity;
+
+    data->gyro_xout = raw_gyro_x / gyro_lsb_sensitivity;
+    data->gyro_yout = raw_gyro_y / gyro_lsb_sensitivity;
+    data->gyro_zout = raw_gyro_z / gyro_lsb_sensitivity;
 
     return 0;
 }

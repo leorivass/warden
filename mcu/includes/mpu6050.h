@@ -6,23 +6,17 @@
 #define GYRO_CONFIG_REG     0x1B
 #define ACCEL_CONFIG_REG    0x1C
 
-#define GYRO_XOUT_H_REG     0x43
-#define GYRO_XOUT_L_REG     0x44
 
-#define GYRO_YOUT_H_REG     0x45
-#define GYRO_YOUT_L_REG     0x46
-
-#define GYRO_ZOUT_H_REG     0x47
-#define GYRO_ZOUT_L_REG     0x48
-
+/* 
+ *  Data registers in the MPU6050 are arranged sequentially in memory:
+ *      0x3B-0x40: Accelerometer (ACCEL_XOUT_H to ACCEL_ZOUT_L)
+ *      0x43-0x48: Gyroscope (GYRO_XOUT_H to GYRO_ZOUT_L)
+ * 
+ *  We only define the starting register for each sensor and use
+ *  burst reads to get all consecutive values efficiently.
+ */
 #define ACCEL_XOUT_H_REG    0x3B
-#define ACCEL_XOUT_L_REG    0x3C
-
-#define ACCEL_YOUT_H_REG    0x3D
-#define ACCEL_YOUT_L_REG    0x3E
-
-#define ACCEL_ZOUT_H_REG    0x3F
-#define ACCEL_ZOUT_L_REG    0x40
+#define GYRO_XOUT_H_REG     0x43
 
 typedef struct mpu6050_data {
 
@@ -36,7 +30,7 @@ typedef struct mpu6050_data {
 
 } mpu6050_data;
 
-void mpu6050_init();
+int mpu6050_init();
 int get_mpu6050_data(mpu6050_data*);
 
 #endif
