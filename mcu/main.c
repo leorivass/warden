@@ -19,12 +19,12 @@ int main() {
 
     while(1) {
 
-    get_mpu6050_data(&data);
-    
-    serial_println(" Gyro_x: %.2f;  Gyro_y: %.2f ;  Gyro_z: %.2f", data.gyro_xout, data.gyro_yout, data.gyro_zout);
-    serial_println("Accel_x: %.2f ; Accel_y: %.2f ; Accel_z: %.2f\n", data.accel_xout, data.accel_yout, data.accel_zout);
+        get_mpu6050_data(&data);
+        
+        serial_println(" Gyro_x: %.2f;  Gyro_y: %.2f ;  Gyro_z: %.2f", data.gyro_xout, data.gyro_yout, data.gyro_zout);
+        serial_println("Accel_x: %.2f ; Accel_y: %.2f ; Accel_z: %.2f\n", data.accel_xout, data.accel_yout, data.accel_zout);
 
-    _delay_ms(1000);
+        _delay_ms(500);
 
     }
 
