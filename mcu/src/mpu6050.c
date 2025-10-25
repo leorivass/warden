@@ -1,8 +1,11 @@
 #include "i2c.h"
 #include "mpu6050.h"
 
-static const float gyro_lsb_sensitivity  = 65.5;
-static const float accel_lsb_sensitivity = 16384.0;
+#define join_bytes(high, low)\
+    (int16_t)((high << 8) | low)
+
+static const float gyro_lsb_sensitivity  = 65.5f;
+static const float accel_lsb_sensitivity = 16384.0f;
 
 int mpu6050_init() {
 
@@ -46,13 +49,13 @@ int get_mpu6050_data(mpu6050_data *data) {
     if(ret) return ret;
 
     /* Get 16-bit raw values for each axis */
-    raw_accel_x = (int16_t)((accel_buffer[0] << 8) | accel_buffer[1]);
-    raw_accel_y = (int16_t)((accel_buffer[2] << 8) | accel_buffer[3]);
-    raw_accel_z = (int16_t)((accel_buffer[4] << 8) | accel_buffer[5]);
+    raw_accel_x = join_bytes(accel_buffer[0], accel_buffer[1]);
+    raw_accel_y = join_bytes(accel_buffer[2], accel_buffer[3]);
+    raw_accel_z = join_bytes(accel_buffer[4], accel_buffer[5]);
 
-    raw_gyro_x  = (int16_t)((gyro_buffer[0] << 8) | gyro_buffer[1]);
-    raw_gyro_y  = (int16_t)((gyro_buffer[2] << 8) | gyro_buffer[3]);
-    raw_gyro_z  = (int16_t)((gyro_buffer[4] << 8) | gyro_buffer[5]);
+    raw_gyro_x  = join_bytes(gyro_buffer[0], gyro_buffer[1]);
+    raw_gyro_y  = join_bytes(gyro_buffer[2], gyro_buffer[3]);
+    raw_gyro_z  = join_bytes(gyro_buffer[4], gyro_buffer[5]);
 
     /* Store data */
     data->accel_xout = raw_accel_x / accel_lsb_sensitivity;

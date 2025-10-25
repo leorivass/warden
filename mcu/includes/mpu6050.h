@@ -6,7 +6,6 @@
 #define GYRO_CONFIG_REG     0x1B
 #define ACCEL_CONFIG_REG    0x1C
 
-
 /* 
  *  Data registers in the MPU6050 are arranged sequentially in memory:
  *      0x3B-0x40: Accelerometer (ACCEL_XOUT_H to ACCEL_ZOUT_L)
