@@ -1,13 +1,7 @@
 #include <avr/io.h>
-// #include "usart.h"
+#include "i2c.h"
 
-#define START_STATUS_CODE       0x08
-#define REPEATED_START_CODE     0x10    
-#define MT_SLA_ACK              0x18
-#define MT_DATA_ACK             0x28
-#define MR_SLA_ACK              0x40
-#define MR_DATA_ACK             0x50
-#define MR_DATA_NACK            0x58
+#define I2C_READ_BIT 0x01
 
 #define send_start()\
     TWCR = (1 << TWINT) | (1 << TWSTA) | (1 << TWEN)
@@ -17,214 +11,151 @@
     TWCR = (1 << TWINT) | (1 << TWEN)
 #define send_ack()\
     TWCR = (1 << TWINT) | (1 << TWEN) | (1 << TWEA)
+#define wait_twint_flag()\
+    while(!(TWCR & (1 << TWINT)))
+
+int i2c_error_tag(uint8_t status_code) {
+
+    switch(status_code) {
+        case START_STATUS_CODE: return I2C_ERR_START;
+        case REPEATED_START_CODE: return I2C_ERR_REPEATED_START;
+        case MT_SLA_ACK: return I2C_ERR_SLAVE_WRITE;
+        case MT_DATA_ACK: return I2C_ERR_WRITE_DATA;
+        case MR_SLA_ACK: return I2C_ERR_SLAVE_READ;
+        case MR_DATA_ACK: return I2C_ERR_READ_ACK;
+        case MR_DATA_NACK: return I2C_ERR_READ_NACK;
+    }
+
+    return I2C_ERR_UNKNOWN;
+}
+
+int i2c_check_ack(uint8_t status_code) {
+
+    if ((TWSR & 0xF8) != status_code) {
+        send_stop();
+        return -i2c_error_tag(status_code);
+    }
+
+    return I2C_OK;
+}
 
 void i2c_init() {
     /* Set I2C transmission speed to 400Khz (fast mode) */
     /* Bits TWPS1 and TWPS0 are set to 0 by default, so we are not going to touch them to have a prescaler value of 1 */
     TWBR = 12;
+}
 
-    return;
+int i2c_send_register(uint8_t slave_address, uint8_t reg_address) {
+
+    int ret;
+
+    send_start();
+    wait_twint_flag();
+
+    ret = i2c_check_ack(START_STATUS_CODE);
+    if(ret) return ret;
+     
+    /* Load slave address + WRITE bit into TWDR register */ 
+    TWDR = slave_address << 1;
+
+    set_twint();
+    wait_twint_flag();
+
+    ret = i2c_check_ack(MT_SLA_ACK);
+    if(ret) return ret;
+ 
+    TWDR = reg_address;
+
+    set_twint();
+    wait_twint_flag();
+
+    ret = i2c_check_ack(MT_DATA_ACK);
+    if(ret) return ret;  
+
+    return I2C_OK;
+}
+
+int i2c_send_repeated_start(uint8_t slave_address) {
+
+    int ret;
+    
+    /* Send a repeated start condition to read the register */
+    send_start();
+    wait_twint_flag();
+
+    ret = i2c_check_ack(REPEATED_START_CODE);
+    if(ret) return ret;
+
+    /* Load slave address + READ bit into TWDR register */
+    TWDR = (slave_address << 1) | I2C_READ_BIT;
+
+    set_twint();
+    wait_twint_flag();
+
+    ret = i2c_check_ack(MR_SLA_ACK);
+    if(ret) return ret;
+
+    return I2C_OK;
 }
 
 int i2c_write_register(uint8_t slave_address, uint8_t reg_address, uint8_t data) {
 
-    send_start();
+    int ret;
 
-    /* Wait for TWINT flag is set by hardware to start transmission */
-    while(!(TWCR & (1 << TWINT)));
-
-    /* If the status code is not 0x08 after sending send_start(), then there was an error*/
-    if ((TWSR & 0xF8) != START_STATUS_CODE) {
-        send_stop();
-        return -1;
-    }
-        
-    /* Load slave address + WRITE bit into TWDR register */ 
-    TWDR = slave_address << 1;
-
-    /* Set TWINT to 1 to clear the TWINT flag and start transmission */
-    set_twint();
-
-    while(!(TWCR & (1 << TWINT)));
-
-    /* If the status code is 0x20 after sending SLAVE_W, NOT_ACK has been received */
-    /* If status code == 0x18, ACK has been received */
-    if ((TWSR & 0xF8) != MT_SLA_ACK) {
-        send_stop(); 
-        return -2;
-    }
- 
-    TWDR = reg_address;
-
-    set_twint();
-
-    while(!(TWCR & (1 << TWINT)));
-
-    /* If the status code is 0x30 after sending DATA, NOT_ACK has been received */
-    /* If status code == 0x28, ACK has been received */
-    if ((TWSR & 0xF8) != MT_DATA_ACK) {
-        send_stop();
-        return -3;
-    }
+    ret = i2c_send_register(slave_address, reg_address);
+    if(ret) return ret;
 
     TWDR = data;
 
     set_twint();
-
-    while(!(TWCR & (1 << TWINT)));
-
-    if ((TWSR & 0xF8) != MT_DATA_ACK) {
-        send_stop();
-        return -4;
-    }
+    wait_twint_flag();
+    
+    ret = i2c_check_ack(MT_DATA_ACK);
+    if(ret) return ret;
 
     send_stop();
 
-    return 0;
+    return I2C_OK;
 }
 
 int i2c_read_register(uint8_t slave_address, uint8_t reg_address, uint8_t *data) {
 
-    send_start();
+    int ret;
 
-    /* Wait for TWINT flag is set by hardware to start transmission */
-    while(!(TWCR & (1 << TWINT)));
+    if (data == NULL) return -I2C_ERR_NULL_PTR;
 
-    /* If the status code is not 0x08 after sending send_start(), then there was an error*/
-    if ((TWSR & 0xF8) != START_STATUS_CODE) {
-        send_stop();
-        return -1;
-    }
-        
-    /* Load slave address + WRITE bit into TWDR register */ 
-    TWDR = slave_address << 1;
+    ret = i2c_send_register(slave_address, reg_address);
+    if(ret) return ret;
 
-    /* Set TWINT to clear the TWINT flag and start transmission */
-    set_twint();
-
-    while(!(TWCR & (1 << TWINT)));
-
-    /* If the status code is 0x20 after sending SLAVE_W, NOT_ACK has been received */
-    /* If status code == 0x18, ACK has been received */
-    if ((TWSR & 0xF8) != MT_SLA_ACK) {
-        send_stop(); 
-        return -2;
-    }
- 
-    TWDR = reg_address;
-
-    set_twint();
-
-    while(!(TWCR & (1 << TWINT)));
-
-    /* If the status code is 0x30 after sending DATA, NOT_ACK has been received */
-    /* If status code == 0x28, ACK has been received */
-    if ((TWSR & 0xF8) != MT_DATA_ACK) {
-        send_stop();
-        return -3;
-    }
-
-    /* Send a repeated start condition to read the register */
-    send_start();
-
-    while(!(TWCR & (1 << TWINT)));
-
-    if ((TWSR & 0xF8) != REPEATED_START_CODE) {
-        send_stop();
-        return -4;
-    }
-
-    /* Load slave address + READ bit into TWDR register */
-    TWDR = (slave_address << 1) | 0x01;
-
-    set_twint();
-
-    while(!(TWCR & (1 << TWINT)));
-
-    if ((TWSR & 0xF8) != MR_SLA_ACK) {
-        send_stop();
-        return -5;
-    }
+    ret = i2c_send_repeated_start(slave_address);
+    if(ret) return ret;
 
     /* Read one byte, send NACK */
     set_twint();
+    wait_twint_flag();
 
-    while(!(TWCR & (1 << TWINT)));
-
-    if ((TWSR & 0xF8) != MR_DATA_NACK) {
-        send_stop();
-        return -6;
-    }
+    ret = i2c_check_ack(MR_DATA_NACK);
+    if(ret) return ret;
 
     *data = TWDR;
 
     send_stop();
 
-    return 0;
+    return I2C_OK;
 }
 
 int i2c_burst_read_registers(uint8_t slave_address, uint8_t start_reg, uint8_t *buffer, uint8_t length) {
 
-    send_start();
+    int ret;
 
-    /* Wait for TWINT flag is set by hardware to start transmission */
-    while(!(TWCR & (1 << TWINT)));
+    if (buffer == NULL) return -I2C_ERR_NULL_PTR;
+    if (length == 0) return -I2C_ERR_INVALID_LEN;
 
-    /* If the status code is not 0x08 after sending send_start(), then there was an error*/
-    if ((TWSR & 0xF8) != START_STATUS_CODE) {
-        send_stop();
-        return -1;
-    }
+    ret = i2c_send_register(slave_address, start_reg);
+    if(ret) return ret;
 
-    /* Load slave address + WRITE bit into TWDR register */ 
-    TWDR = slave_address << 1;
-
-    /* Set TWINT to clear the TWINT flag and start transmission */
-    set_twint();
-
-    while(!(TWCR & (1 << TWINT)));
-
-    /* If the status code is 0x20 after sending SLAVE_W, NOT_ACK has been received */
-    /* If status code == 0x18, ACK has been received */
-    if ((TWSR & 0xF8) != MT_SLA_ACK) {
-        send_stop(); 
-        return -2;
-    }
-
-    TWDR = start_reg;
-
-    set_twint();
-
-    while(!(TWCR & (1 << TWINT)));
-
-    /* If the status code is 0x30 after sending DATA, NOT_ACK has been received */
-    /* If status code == 0x28, ACK has been received */
-    if ((TWSR & 0xF8) != MT_DATA_ACK) {
-        send_stop();
-        return -3;
-    }
-
-    /* Send a repeated start condition to read the register */
-    send_start();
-
-    while(!(TWCR & (1 << TWINT)));
-
-    if ((TWSR & 0xF8) != REPEATED_START_CODE) {
-        send_stop();
-        return -4;
-    }
-
-    /* Load slave address + READ bit into TWDR register */
-    TWDR = (slave_address << 1) | 0x01;
-
-    set_twint();
-
-    while(!(TWCR & (1 << TWINT)));
-
-    if ((TWSR & 0xF8) != MR_SLA_ACK) {
-        send_stop();
-        return -5;
-    }
+    ret = i2c_send_repeated_start(slave_address);
+    if(ret) return ret;
 
     for(uint8_t i = 0; i < length; i++) {
 
@@ -241,12 +172,10 @@ int i2c_burst_read_registers(uint8_t slave_address, uint8_t start_reg, uint8_t *
             STATUS_CODE = MR_DATA_ACK;
         }
 
-        while(!(TWCR & (1 << TWINT)));
+        wait_twint_flag();
 
-        if ((TWSR & 0xF8) != STATUS_CODE) {
-            send_stop();
-            return -6;
-        }
+        ret = i2c_check_ack(STATUS_CODE);
+        if(ret) return ret;
 
         buffer[i] = TWDR;
 
@@ -254,5 +183,5 @@ int i2c_burst_read_registers(uint8_t slave_address, uint8_t start_reg, uint8_t *
 
     send_stop();
 
-    return 0;
+    return I2C_OK;
 }
